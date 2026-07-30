@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  if (import.meta.env.VITE_API_URL) return `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api/v1`;
+  return 'http://localhost:5000/api/v1';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1',
+  baseURL: getBaseUrl(),
 });
 
 // Request interceptor to add token

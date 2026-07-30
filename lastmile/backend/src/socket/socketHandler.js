@@ -26,8 +26,9 @@ export const initSocket = (io) => {
       if (driverId) {
         try {
           await setDriverLocation(driverId, lat, lng);
+          await prisma.driver.update({ where: { id: driverId }, data: { current_lat: lat, current_lng: lng } }).catch(() => {});
         } catch (e) {
-          // Ignore redis failure in local fallback mode
+          // Ignore redis/db failure in local fallback mode
         }
 
         const payload = { driverId, lat, lng, heading, speedKmh, leg, timestamp: new Date().toISOString() };

@@ -22,6 +22,17 @@ const Home = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [completedRideId, setCompletedRideId] = useState(null);
   const [telemetryData, setTelemetryData] = useState(null);
+  const activeRideRef = useRef(activeRide);
+
+  useEffect(() => {
+    activeRideRef.current = activeRide;
+    if (activeRide && socket) {
+      const driverId = activeRide.driverId || activeRide.driver_id || activeRide.driver?.id;
+      if (driverId) {
+        socket.emit('passenger:track_driver', { driverId });
+      }
+    }
+  }, [activeRide, socket]);
 
   useEffect(() => {
     const fetchZones = async () => {
@@ -95,7 +106,8 @@ const Home = () => {
     };
     fetchActiveSession();
 
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000');
+    const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, '') : 'http://localhost:5000');
+    const newSocket = io(socketUrl);
     setSocket(newSocket);
 
     if (user) {
@@ -104,6 +116,10 @@ const Home = () => {
       newSocket.on(`ride:driver_found_${user.id}`, (data) => {
         setRideStatus('ACCEPTED');
         setActiveRide(prev => ({ ...prev, ...data }));
+        const driverId = data.driverId || data.driver_id || data.driver?.id;
+        if (driverId) {
+          newSocket.emit('passenger:track_driver', { driverId });
+        }
       });
 
       newSocket.on(`ride:status_update_${user.id}`, (data) => {
@@ -141,7 +157,11 @@ const Home = () => {
       });
 
       newSocket.on('ride:driver_location', (data) => {
-        setTelemetryData(data);
+        const currentRide = activeRideRef.current;
+        const assignedDriverId = currentRide?.driverId || currentRide?.driver_id || currentRide?.driver?.id;
+        if (!assignedDriverId || String(data.driverId) === String(assignedDriverId)) {
+          setTelemetryData(data);
+        }
       });
     }
 

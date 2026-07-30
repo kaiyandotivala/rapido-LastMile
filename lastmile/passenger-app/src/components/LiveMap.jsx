@@ -71,12 +71,12 @@ function SmoothTelemetryMarker({ targetCoords, telemetryInfo }) {
     };
   }, [targetCoords]);
 
-  // Center map on marker position if active tracking
+  // Smoothly pan map on new target telemetry updates (once per tick)
   useEffect(() => {
-    if (currentCoords && map) {
-      map.panTo(currentCoords, { animate: true, duration: 0.5 });
+    if (targetCoords && map) {
+      map.panTo(targetCoords, { animate: true, duration: 1.5 });
     }
-  }, [currentCoords, map]);
+  }, [targetCoords, map]);
 
   return (
     <Marker position={currentCoords} icon={rickshawLiveIcon}>

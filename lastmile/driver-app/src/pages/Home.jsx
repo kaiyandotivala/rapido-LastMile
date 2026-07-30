@@ -68,7 +68,8 @@ const Home = () => {
     };
     fetchActiveSession();
 
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000');
+    const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, '') : 'http://localhost:5000');
+    const newSocket = io(socketUrl);
     setSocket(newSocket);
 
     if (user) {
@@ -111,20 +112,69 @@ const Home = () => {
       });
     }
 
+    // Screen Wake Lock setup
+    let wakeLockSentinel = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && (isOnline || activeRide)) {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn(`Screen Wake Lock error: ${err.name}, ${err.message}`);
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockSentinel) {
+        try {
+          await wakeLockSentinel.release();
+          wakeLockSentinel = null;
+        } catch (err) {
+          console.warn(`Screen Wake Lock release error: ${err.name}, ${err.message}`);
+        }
+      }
+    };
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && (isOnline || activeRide)) {
+        await requestWakeLock();
+      }
+    };
+
+    if (isOnline || activeRide) {
+      requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // High accuracy GPS geolocation watch
     let watchId;
     if (isOnline && navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          const { latitude, longitude } = pos.coords;
-          newSocket.emit('driver:location_update', { lat: latitude, lng: longitude });
+          const { latitude, longitude, heading, speed } = pos.coords;
+          const speedKmh = speed ? Math.round(speed * 3.6) : 0;
+          newSocket.emit('driver:location_update', { 
+            lat: latitude, 
+            lng: longitude,
+            heading: heading || 0,
+            speedKmh
+          });
         },
-        (err) => console.error(err),
-        { enableHighAccuracy: true }
+        (err) => {
+          console.error("Geolocation error:", err);
+          if (err.code === err.PERMISSION_DENIED) {
+            alert("Location access denied. Please enable location permissions in browser settings to go online.");
+            setIsOnline(false);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     }
 
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
       newSocket.close();
     };
   }, [user, isOnline]);
