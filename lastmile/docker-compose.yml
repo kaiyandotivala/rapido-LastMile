@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: lastmile_postgres
+    environment:
+      POSTGRES_USER: lastmile_db_user
+      POSTGRES_PASSWORD: lastmile_password
+      POSTGRES_DB: lastmile_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - lastmile_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lastmile_db_user -d lastmile_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lastmile_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - lastmile_network
+
+# The backend and frontend services can be run natively via 'npm run dev' during development 
+# or containerized if preferred. For MVP local dev, we will rely on pg and redis docker containers
+# to keep hot-reloading native and fast via Node and Vite locally.
+
+volumes:
+  pgdata:
+
+networks:
+  lastmile_network:
+    driver: bridge

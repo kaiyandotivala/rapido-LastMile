@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  phone          String?
+  name           String?
+  profile_pic    String?
+  wallet_balance Float    @default(0.0)
+  createdAt      DateTime @default(now())
+
+  rides          Ride[]
+}
+
+model Driver {
+  id                  String         @id @default(uuid())
+  phone               String         @unique
+  name                String?
+  profile_pic         String?
+  vehicle_number      String?
+  is_verified         Boolean        @default(false)
+  is_online           Boolean        @default(false)
+  current_lat         Float?
+  current_lng         Float?
+  rating              Float          @default(5.0)
+  total_rides         Int            @default(0)
+  createdAt           DateTime       @default(now())
+
+  // Document verification
+  driving_license     String?        @db.Text
+  fitness_certificate String?        @db.Text
+  aadhar_card         String?        @db.Text
+  document_status     DocumentStatus @default(PENDING)
+  rejection_reason    String?
+
+  rides          Ride[]
+  subscriptions  DriverSubscription[]
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ZoneType {
+  COLLEGE
+  STATION
+  OFFICE
+}
+
+model Zone {
+  id             String   @id @default(uuid())
+  name           String
+  lat            Float
+  lng            Float
+  zone_type      ZoneType
+  is_active      Boolean  @default(true)
+
+  pickup_rides   Ride[]   @relation("PickupZone")
+  dropoff_rides  Ride[]   @relation("DropoffZone")
+}
+
+enum RideStatus {
+  SEARCHING
+  ACCEPTED
+  DRIVER_ARRIVING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+model Ride {
+  id                  String     @id @default(uuid())
+  passengerId         String
+  driverId            String?
+  pickupZoneId        String
+  dropoffZoneId       String
+  
+  status              RideStatus @default(SEARCHING)
+  
+  meter_fare          Float?
+  convenience_fee     Float      @default(5.0)
+  wait_time_penalty   Float      @default(0.0)
+  peak_hour_surcharge Float      @default(0.0)
+  total_fare          Float?
+  payment_method      String     @default("UPI")
+  payment_status      PaymentStatus @default(PENDING)
+  payment_otp         String?    // 4-digit payment confirmation OTP
+  
+  otp                 String?    // 4-digit ride start OTP
+  
+  requested_at        DateTime   @default(now())
+  accepted_at         DateTime?
+  pickup_at           DateTime?
+  dropoff_at          DateTime?
+  cancelled_at        DateTime?
+  cancel_reason       String?
+
+  createdAt           DateTime   @default(now())
+
+  passenger           User       @relation(fields: [passengerId], references: [id])
+  driver              Driver?    @relation(fields: [driverId], references: [id])
+  pickup_zone         Zone       @relation("PickupZone", fields: [pickupZoneId], references: [id])
+  dropoff_zone        Zone       @relation("DropoffZone", fields: [dropoffZoneId], references: [id])
+
+  trainSync           TrainSyncBooking?
+  ratings             Rating[]
+  transactions        Transaction[]
+}
+
+model TrainSyncBooking {
+  id                        String   @id @default(uuid())
+  rideId                    String   @unique
+  train_number              String
+  current_station           String
+  target_station            String
+  estimated_arrival_minutes Int
+
+  ride                      Ride     @relation(fields: [rideId], references: [id])
+}
+
+model Rating {
+  id          String   @id @default(uuid())
+  rideId      String
+  rated_by    String   // "PASSENGER" | "DRIVER"
+  rated_to_id String
+  stars       Int
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  ride        Ride     @relation(fields: [rideId], references: [id])
+}
+
+enum TransactionType {
+  CONVENIENCE_FEE
+  WAIT_PENALTY
+  PEAK_SURCHARGE
+  DRIVER_COMMISSION
+}
+
+model Transaction {
+  id        String          @id @default(uuid())
+  rideId    String
+  amount    Float
+  type      TransactionType
+  createdAt DateTime        @default(now())
+
+  ride      Ride            @relation(fields: [rideId], references: [id])
+}
+
+model DriverSubscription {
+  id        String   @id @default(uuid())
+  driverId  String
+  plan      String   // "BASIC" | "PRO"
+  startDate DateTime @default(now())
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+
+  driver    Driver   @relation(fields: [driverId], references: [id])
+}
